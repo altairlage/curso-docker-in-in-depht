@@ -1,0 +1,28 @@
+Description
+    Lab Overview
+        Amazon EC2 Container Registry (ECR) is a fully-managed Docker container registry that helps you store, manage, 
+        and deploy Docker container images.  ECR is integrated with Amazon EC2 Container Service (ECS), streamlining your 
+        development and deployment operations. You can use Amazon's other services such as Simple Storage Service (S3) and 
+        Identity and Access Management (IAM) to control and manage your entire container-based solution. In this Lab you will 
+        build two Docker container images with Amazon CodeBuild, push the images to ECR, and perform a blue-green deployment 
+        operation using ECS.
+
+Lab Objectives
+    Upon completion of this Lab you will be able to:
+
+    Use application source files to create Docker container images and place them in Amazon ECR.
+    Create an Amazon ECS cluster.
+    Use the Amazon ECR images to create task definitions and services.
+    Implement the services in ECS container instances and adjust instance numbers.
+    Register ECS container instances with an Application Load Balancer (ALB).
+    Switch from one deployed application to another quickly and with no downtime.
+
+Lab Prerequisites
+    You should be familiar with:
+
+    Basic understanding of local operating system and computer use.
+    An understanding of Docker and container concepts is helpful, but not required.
+    Updates
+    July 18th, 2018 - Updated screenshots and instructions to match the new Console experience
+
+

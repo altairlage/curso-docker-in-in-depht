@@ -1,0 +1,133 @@
+UCP - Universal control plane
+   Central de gerenciamento da verao enterprise do dock
+
+    docker info | grep Swarm
+        para verificar que o daemon esta rodando em modo Swarm
+
+    docker swarm --help
+
+    docker swarm init
+        para executar em single node swarm
+
+    docker swarm join-token manager
+        para mostrar o join token como manager
+
+    docker info --format '{{json .Swarm}}'
+        para pegar mais informaçeos do daemon swarm
+
+    se rodar docker network ls
+        a network docker_gwbridge vai estar ativa para conectar overlays network
+        ingress networ tambem estará ativa para gerenciar o ingress traffic para o swarm
+
+    docker swarm leave --force
+        para dar um tear down no swarm node 
+        -- force necessario para fazer o ultimo no (ou unico) sair 
+
+--- swarm em multi node
+
+    docker-machine create vm1
+        por default vai criar uma vm no virtualbox com o docker instalado
+
+    docker-machine ls
+        lista as maquinas docker e suas informaçeos
+        se der um ssh docker vai estar rodando nas vms
+
+    docker swarm init --advertise-addr=192.168.99.100
+        inicia o swarm na vm setando o join ip para se juntar ao Swarm
+        alternativamente tambem pode se passar o nome da interface de rede
+
+    para criar os nos, precisa se rodar o join command em todos os nos
+
+
+
+--- Managing Nodes
+
+    - Promoting - transforma um node em manager. pode ser feito em mais de um para ter um swarm fault tolerant
+
+    - Demoting - o contrario, tira um no do papel de manager para colocar em um papel de worker
+
+    - Availabilities - active, pause e drain
+        Active significa que uma task pode ser agendada em um node
+        pause nao pode agendar tarefas, mas existem tarefas rodando e nao serao canceladas
+        drain nada pode ser agendado e tudo que esteja rodando vai ser terminated
+            setar um no como drain pode ser util para colocar um no como offline antes de uma manutençao
+
+    - docker node ls
+        lista os nos do Swarm
+
+    - docker node promote vm2
+        promove a vm2 para manager
+
+    -docker node demote vms
+        faz demote do no colocando-o como worker
+
+    - docker node update --availability drain vm1
+        vai atualizar a availability para drain na vm1
+
+    - docker node update --label-add zone=1 vm1
+        para ver as zone labels vc precisa usar o comando docker node inspect vm1 ou
+        docker node inspect -f '{{.Spec.Labels}}'
+
+
+--- Docker swarm visualizer
+
+    - docker service -- help
+
+    - docker service create
+        similar ao docker run mas para serviços
+
+    - docker service create \
+        --constraint=node.role=manager \
+        --mode=global \
+        --publish mode=host,target-8080,published=8080 \
+        --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+        --name=viz \
+        dockersampls/visualizer
+
+    - docker service inspect viz --pretty | more
+
+    - docker service ps viz
+        mostra as informaçoes do serviço rodando
+
+    - docker service create \
+        --constraint node.labels.zone!=1 \
+        --replicas 2 \
+        --placement-ref 'spread=node.labels.zone' \
+        -e NODE_NAME='{{.Node.Hostname}}' \
+        -p 80:80 \
+        --name nodenamer \
+        lrakai/nodenamer:1.0.0
+
+    - docker service update --image lrakai/nodenamer:1.0.1 nodenamer
+        autaliza o serviço namer em ambas as instancias
+
+    - docker service scale nodenamer=6
+        faz scale up do serviço para 6 tasks do mesmo. swarm decide onde rodar as tasks
+
+    - docker service update --rollback-parallelism 2 nodenamer
+        seta o paralelismo dos updates para 2 tasks por vez
+
+    - docker service update --image lrakai/nodenamer:1.0.0 nodenamer
+        para voltar p versao 1.0.0
+
+    - docker service rollback nodenamer
+        volta para o estado antes do ultimo update, que no caso seria a versao 1.0.1
+
+
+
+-- Working with stacks
+
+    - docker-stack.yml is the default name by convention
+
+    - definiçoes de stack esta sob a key 'deploy:'
+
+    - docker stack --help
+
+    - deploy e rm sao similares ao up e down do docker-compose
+
+    - docker stack deploy --help
+
+    - docker stack deploy -c docker-stack.yml demo
+        cria / atualiza a stack e os recursos descritos no arquivo, com o nome de demo
+
+

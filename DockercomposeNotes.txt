@@ -1,0 +1,99 @@
+
+Resources:
+    https://github.com/cloudacademy/docker-compose-training
+
+
+uses yaml format.
+
+depends_on = define a dependencia entre containers e a ordem em q serao iniciados.
+
+viariaveis sao definidas no dockercompose como ${VARIAVEL} OU $VARIAVEL
+
+Extension fragments:
+    usandos para reutilizar fragmentos de configuraçao
+    Usa yaml anchors
+    root keys começam com x-
+    o nome do alias do anchor começa com &
+    para colocar no meio do arquivo o bloco desejado coloca-se *<nome do fragmento>
+
+
+
+--- Compose CLI
+
+Os arquivos que serao procurados por padrao pelo comando docker-compose sao: docker-compose.yaml ou docker-compose.yml
+    A opçao -f permine especificar um caminho/nome para o arquivo desejado
+
+Projetos representam aplicaçoes isoladas
+    Usa o diretorio como nome do Projetos
+    -p permite especificar um nome de Projeto customizado
+
+    - docker-compose up
+        - Cria networks e volumes
+        - build, cria, start, e attacha aos containers de serviços
+        - executa detecçao de mudanças. Recria os containers baseado nas mudanças ocorridas
+    
+    -docker-compose down
+        - remove os containers de service, named e default networks
+        - leaves volumes and images by default
+    
+    - docker-compose -f 3-extension-fields.yml config
+        Para validar o arquivo 3-extension-fields.yml
+        para expor uma variavel e ela ser substituida pelo seu valor quando utilizado o comando:
+            - export REDIS_VERSION=4.0.6
+
+
+
+--- webapp with docker-compose
+
+    - restart: always   - faz o container reiniciar caso saia por algum motivo
+
+    - se nao for especificado nenhuma network, docker-compose vai colocar todos os containers em uma default network a ser criada.
+
+    - docker-compose -f wordpress.yml up -d
+        Roda os containers wordpress e mysql em sincronia. cria os recursos necessarios (redes, volumes, images, )
+
+    - docker-compose -f wordpress.yml up -d --do-deps wordpress
+        Roda apenas o container descrito com nome wordpress sem subir as dependencias
+
+    - docker-compose -f wordpress.yml up -d --force-recreate
+        Roda os containers forçando-os a serem recriados
+
+    - docker-compose -f wordpress.yml down
+        para e remove os containers criados e rodando pelo arquivo
+        por default, deixa os volumes criados no disco, nao os deleta
+
+    - docker-compose -f wordpress.yml down --rmi all --volumes --remove-orphans
+        para todos os containers criados pelo arquivo, remove os containers, as imagens e volumes e qualquer outro orfao
+        pode ser necessario dar um docker image prune -a para limpar todas as imagens restantes
+
+
+
+--- Using Compose Configurations and Commands to Build Images
+
+    - docker-compose up and docker-compose build podem ser utilizados para buildar imagens
+
+    - docker-compose up --build 
+        --build faz sempre buildar as imagens
+
+    - docker-compose build
+        Builda ou rebuilda as sem iniciar os containers.
+        Mais controle com os args --no-cache e --pull
+
+    -- Exemplo usando o projeto com node
+        docker-compose -f dev.docker-0compose.yml logs app
+            para ver os logs da app nodejs
+
+
+
+--- How Compose Handles and Combines Multiple Files
+
+docker-compose usa a seguinte estrutura para manter varios arquivos:
+    Base configuration + overrides
+    Arquivos padrao:
+        docker-compose.jml
+        docker-compose.override.yml
+    
+    Validando configuraçao dos arquivos de dev:
+        docker-compose -f docker-compose.yml -f dev.docker-compose.yml config
+            A saída mostra a como ficara a versao final com as configuraçoes combinadas
+

@@ -1,0 +1,431 @@
+DOCKER NOTES
+
+========================================== resources =============================================================
+https://github.com/cloudacademy/introduction_to_docker
+https://docs.docker.com/engine/reference/builder/
+https://golang.org/
+==================================================================================================================
+
+docker ps - listar containers rodando
+
+docker images - listar imagens baixadas
+
+/var/lib/docker/image/overlay/imagedb/content/sha256/ - diretorio com as layers de imagens do docker - sao arquivos JSON
+
+cat /var/lib/docker/image/overlay/imagedb/content/sha256/<sha256 da imagem> | python -m json.tool   = lista o conteudo do json da imagem
+
+docker inspect <image>   = mostra a mesma informa;cao acima
+
+docker run -it ubuntu    = baixa a imagem ubuntu, cria um container e roda em modo iterativo.
+
+docker run -it ubuntu /bin/bash  = mesma coisa que acima mas vai ser destruido depois da execuçao do comando
+
+docker start <container name>   = inicia um container
+
+docker ps -aux
+
+docker attach <container name>     - attachar em um container rodando
+
+docker rmi <image ID>  - deleta uma imagem 
+
+docker run -d <container>  = roda o container em background
+
+docker container prune  == deleta todos containers parados
+
+- saber o ip de um container:
+	docker inspect
+	"Networks"/"IPAddress"
+
+
+======== DOCKERFILE -===========
+
+docker commit  - cria uma nova imagem a partir de mudanc;as de um container
+
+EXEMPLO:
+	docker run -it ubuntu /bin/bash/
+		apt update
+		apt install python
+		exit
+	
+	docker commit <container ID> <tag desejada>
+	- transforma o container criado na imagem <tag desejada>
+	
+	- Mudando o comando default do container/imagem:
+		docker commit --change='CMD ["python", "-c", "import this"]' <container ID> <tag desejada>
+	
+	
+======= PORT MAPPING - EXPOR UMA PORTA OU VARIAS ======
+
+docker run -d -P webapp   == vai rodar o container em background, e expor a porta utilizada pelo container (8080) fazendo bind para uma porta do host.
+  -P = publish all
+docker ps -a  === vai mostrar o container rodando e aparecendo a porta utilizada pelo container e o mapeamento para a porta do host
+
+ESCOLHENDO A PORTA A SER MAPEADA:
+
+docker run -d -p 3000:8080 webapp  = vai rodar o container webapp, expondo a porta do host 3000, mapeando-a para a porta 8080 do container.
+	-p = publish
+
+teste:
+	docker ps -a vai mostrar os containers rodando e os mapeamentos
+
+======================================= NETWORKING ===============================================================
+
+docker network ls	= mostra as redes existentes - existing Networks
+
+- tipos de network
+	- bridge = default network. toda vez que vc inicia um container e nao especifica uma rede essa será utilizada
+	
+
+		- para criar o container baseado no dockerfile da pasta networking:
+			* docker build -t "ubuntu_networking" .
+			-t = tag a ser utilizada
+		
+		- listar a imagem criada:
+			docker images
+		
+		- rodar imagem criada:
+			docker run -it ubuntu_networking
+		
+		- listar interfaces dentro do container:
+			ip addr show
+		
+		- sair do container sem mata-lo
+			ctrl+p ctrl+q
+			docker ps	= para ver os containers rodando
+		
+		- da maquina local, vc pode interagir com o container via ping
+			ping 172.17.0.2 ou ping <ip do container>
+
+		- vc pode rodar mais containers na mesma rede criando mais containers com o mesmo comando:
+				docker run -it ubuntu_networking
+			entao vc pode dar ping entre os containers, esses terao ips sequenciais no caso do exemplo. EX.: 172.17.0.2 172.17.0.3 172.17.0.4 ...
+		
+		- para ver todos os containers na mesma rede, de dentro de um container, pode se usar o arp-scan:
+			arp-scan --interface=eth0 --localnet
+			vai listar o gateway default primeiro e os demais containers depois na lista.
+	
+
+	- host	= adiciona os containers para rede do host. Se por exemplo vc possui um container que executa uma aplicaçao na porta 8080, 
+		ela sera feita bound para a porta 8080 do host. uma rede do tipo host nao tem isolamento entre o host e os containers.
+
+		- Ex.: se rodarmos o mesmo container da aula networking com o seguinte comando, iremos rodar a aplicaçao webapp (porta 8080)
+			na porta 8080 do host. isso vai rodar o container em backgound, usando a rede do host e executara a webapp:
+				docker run -d --network=host ubuntu_networking /webapp
+		- docker ps para ver os containers e entao dar um inspect no container para ver os detalhes da rede:
+			docker inspect <id do container>
+				- vc perceberá que o ip está vazio em "Networks" pois tudo desse container vai rodar no host.
+		
+		- para ver a aplicaçao webapp rodando localmente, saia do container e rode o comando:
+				curl localhost:8080
+			Retornará o html da aplicaçao webapp
+
+		Nesse exemplo nao expomos nenhuma porta manualmente. Quando utilizado a rede host, todas as portas usadas pelo container,
+		serão ligadas as redes da maquina (host). Se rodar um container que usa/expoe a porta 9090, 
+		a porta 9090 da maquina será usada para a aplicaçao do container.
+
+
+	- none = Significa que o container nao usa nenhuma rede. At all.
+		
+		- rodando o mesmo contaoner na rede none:
+			docker run -it --network=none ubuntu_networking
+		
+		- se listadas as interfaces, somente a interface loopback existirá:
+			ip add show
+		
+
+
+============================== Introduction to Persistent Storage Options in Docker ==============================
+
+a ultima layer de um container é a layer writable. Existem 3 tipos de armazenamento para containers:
+
+- Bind Mounts:
+	Monta um arquivo/diretorio do host para dentro do container. efetivo para acessar arquivos e pastas de seu host de dentro do container
+	Uma vez qeu o container para, os dados continuam, pois estao salvas no host.
+	A desvantagem é que as informaçoes nao estao tao desligadas do host. Vc precisa saber o path exato da pasta/arquivo do host para
+	montar no container.
+	A vantagem é para desenvolvimento, vocë nao precisa rebuildar a imagem para ter acesso as mudanças que fez no seu codigo.
+	voce muda o codigo e as mudanças refletem no container imediatamente.
+
+- Volumes:
+	Melhor maneira de gerir persistencia com containers. é como bind Mounts, mas docker gerencia o storage no host.
+	entao vc nao precisa saber o path exato do aquivo para utiliza-lo. O que é bom em cross platform.
+	Os drivers de volumes suportam varios tipos de fs, como os de cloud como aws s3 e outros.
+	quando vc para o container, os dados continuam no host.
+
+- In-memory Storage (tmpfs):
+	Ao contrario dos demais vc interage com os arquivos no container como um file system comum, mas os arquivos nao sao persistidos.
+	Pois os dados sao perdidos assim que o container para. Bom para armazenamento de informacoes sensiveis como access tokens.
+
+para testar usando o app em go:
+
+	- Bind maps:
+		- mkdir /var/dockerdemo/logs
+		- build da imagem:
+			docker build -t "scratch_volume" .
+		
+		- rodar o container da imagem criada fazendo bind:
+			docker run -d \
+			--mount type=bind,src="/var/dockerdemo/logs",dst=/logs \
+			scratch_volume
+
+			docker run -d --mount type=bind,src="/var/dockerdemo/logs",dst=/logs scratch_volume
+		
+		- rode varios desses containers para testar que varios containers podem fazer acesso aos mesmos arquivos
+
+		- para ver os dados gravados no aquivo:
+			tail -n 30 /var/dockerdemo/logs
+		
+		- para printar os unique host id do aquivo:
+			cat /var/dockerdemo/logs/myapp | cut -d " " -f 2 | sort | uniq
+				so serao exibitos os ids dos containers
+	
+		- lembre que neste tipo de armazenamento, os aquivos sao gerenciados por vc e nao pelo docker
+
+
+	- Volumes:
+
+		- executar o mesmo container so que usando volumes:
+			docker run -d \
+			--mount type=volume,src="logs",dst=/logs \
+			scratch_volume
+
+			docker run -d --mount type=volume,src="logs",dst=/logs scratch_volume
+
+		- Como o docker gerencia o armazenamento, vc nao precisa colocar um path para isso, mas sim apenas um nome para o volume "logs"
+
+		- vc tbm pode criar volumes usando o comando volume. Mas se nao existir o volume docker vai criar um novo volume para vc quando usar a flag --mount
+
+		- para listar os volumes:
+			docker volume ls
+
+		- para inspecionar os volumes:
+			docker volume inspect logs
+			- mountpoint mostra onde os arquivos serao salvos
+		
+		- crie varios containers para ver como se comportam com o mesmo comando.
+
+		- para ver os dados a cada segundo:
+			tail -F -s1 /var/lib/docker/volumes/logs/_data/myapp
+
+		- para ver os container ids escrevendo no arquivo/volume:
+			cat /var/lib/docker/volumes/logs/_data/myapp | cut -d " " -f2 | sort | uniq
+
+	- Tempfs
+
+		- comando para criar os containers usando ubuntu:
+			docker run -d \
+			--mount type=tmpfs,src="logs" \
+			ubuntu
+
+			docker run -d --mount type=volume,src="logs" ubuntu
+
+		- como é so um armazenamento temporario, nao é preciso especificar um destino, pois nao ha nada que o host tenha que persistir.
+
+		- criar algo dentro do armazenamento /logs
+			echo "temp fs" > /logs/dockerdemo
+
+			depois sair do container com ctrl+p ctrl+q e manter rodando
+		
+		- atachar de volta no container:
+			docker attach <container id>
+
+
+========================================================== TAGGING ===============================================
+
+Para criar uma imagem com a tag especifica para o dockerfile da pasta tagging:
+	docker build -t "tag_demo" .
+	cria uma imagem a partir do dockerfile da pasta . com a tag "tag_demo" como um image name.
+
+para criar a imagem com o image name e uma versao
+	docker tag tag_demo:latest tag_demo:v1
+
+Se vc criar um container sem especificar uma tag, ele sempre vai usar a imagem com a tag latest.
+
+push docker image to dockerhub:
+	docker login		- para logar no dockerhub
+
+para enviar para o dockerhub vc tambem precisa especificar seu username como parte da tag / image name.
+dockerhub nao aceita qualquer nome de tag para organizar suas imagens no registry.
+	docker tag tag_demo:latest acampos/tag_demo:latest		ou
+	docker tag <iamge name>:<tag versao> <username>/<imagename / tag>:<tag/versao>
+
+	docker push acampos/tag_demo		- para enviar para o dockerhub
+
+======================================================== ON HANDS LAB ============================================
+1. In the ssh terminal, enter the following command to install the yum-utils package:
+	sudo yum install -y yum-utils
+
+	The yum-utils package includes a handy utility for adding package repositories that you will use next.
+
+2. Enter the following to add the Docker CE package repositories to your system:
+	sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+ 
+3. Enter the subsequent command to update the yum cache with the Docker repositories:
+	sudo yum makecache fast
+ 
+4. Enter the following to install Docker CE:
+	sudo yum -y install docker-ce
+ 
+5. Enter the command below to start Docker as a service:
+	sudo systemctl start docker
+ 
+6. Verify Docker is running by entering:
+	sudo docker info
+
+
+--- USE DOCKER WITHOUT sudo
+1. Try entering the same command without using root permission:
+	docker info
+
+	You will receive a permission denied error message similar to:
+	By default, the Docker daemon will reject requests from users that aren't part of the docker group. If you encounter this message in your travels, you can either use root permission or add your user to the docker group.
+
+2. Verify the docker group exists by searching for it in the groups file:
+
+	grep docker /etc/group
+	If you don't see a line beginning with "docker:", you will need to add the group yourself by entering:
+
+	sudo groupadd docker
+
+3. Add your user to the docker group:
+
+	sudo gpasswd -a $USER docker
+	The groups of the currently logged in user is cached, you can verify this by entering groups.
+
+4. You can login again to have your groups updated by entering:
+
+	newgrp docker
+	Now you will have docker in your list of groups if you enter groups.
+
+	Note: It is convenient to not have to terminate your current ssh session by using newgrp, but terminating the ssh session and logging in again will work just as well.
+
+ 
+
+5. Verify that your user can successfully issue Docker commands by entering:
+
+	docker info
+	
+	Note: if you don't see the system-wide Docker information, you may need to restart the Docker daemon by entering sudo systemctl restart docker.
+
+
+
+Comandos interessantes:
+
+	docker run --name web-server -d -p 8080:80 nginx:1.12
+
+		This runs the nginx web server in a container using the official nginx image. You will see output similar to:
+
+		alt
+
+		This time you specified the tag 1.12 indicating you want version 1.12 of nginx instead of the default latest version. There are three Pull complete messages this time, indicating the image has three layers. The last line is the id of the running container. The meanings of the command options are:
+
+		--name container_name: Label the container container_name. In the command above, the container is labeled web-server. This is much more manageable than the id, 31f2b6715... in the output above.
+		-d: Detach the container by running it in the background and print its container id. Without this, the shell would be attached to the running container command and you wouldn't have the shell returned to you to enter more commands.
+		-p host_port:container_port: Publish the container's port number container_port to the host's port number host_port. This connects the host's port 8080 to the container port 80 (http) in the nginx command.
+
+	docker stop web-server
+
+	docker start web-server
+
+	docker logs web-server
+		To see the container's output messages, enter:
+		Docker logs messages written to standard output and standard error. In the case of nginx, it writes a line for each request that it receives.
+
+	docker exec -it web-server /bin/bash
+		You can run other commands in a running container. For example, to get a bash shell in the container
+		Which will cause your shell prompt to change to something similar to:
+		This indicates you are at a shell prompt in the container using the root container user. The -it options tell Docker to handle your keyboard events in the container. Enter some commands to inspect the container environment, such as ls and cat /etc/nginx/nginx.conf. When finished, enter exit to return to the VM ssh shell. Your shell prompt should change to confirm you are no longer in the container bash shell.
+
+	docker exec web-server ls /etc/nginx
+		 To list the files in the container's /etc/nginx directory,
+	
+	docker search "Microsoft .NET Core"
+		Search for an image that you don't know the exact name of, say an image for Microsoft .NET Core
+		This searches Docker Hub for images related to the string provided. In this case, the top results related to .NET Core are returned
+
+
+--- CREATE FLASK DOCKER image
+
+sudo yum -y install git
+
+git clone https://github.com/cloudacademy/flask-content-advisor.git
+cd flask-content-advisor
+
+vi Dockerfile
+	Content:
+		# Python v3 base layer
+		FROM python:3
+
+		# Set the working directory in the image's file system
+		WORKDIR /usr/src/app
+
+		# Copy everything in the host working directory to the container's directory
+		COPY . .
+
+		# Install code dependencies in requirements.txt
+		RUN pip install --no-cache-dir -r requirements.txt
+
+		# Indicate that the server will be listening on port 5000
+		EXPOSE 5000
+
+		# Set the default command to run the app
+		CMD [ "python", "./src/app.py" ]
+
+	FROM sets the base layer image
+	COPY . . copies all of the files in the code repository into the container's /usr/src/app directory
+	RUN executes a command in a new layer at the top of the image
+	EXPOSE only indicates what port the container will be listening on, it doesn't automatically open the port on the container
+	CMD sets the default command to run when a container is made from the image
+
+docker build -t flask-content-advisor:latest .
+
+curl ipecho.net/plain; echo
+	Record your VM's public IP address
+
+docker run --name advisor -p 80:5000 flask-content-advisor
+
+Open the browser accessing the IP of your machine. It will open a page from the container and log the webapp logs in the console.
+
+
+
+--- Cleaning Up Your Docker Containers and Images
+
+docker system df
+	Get an understanding of how much space is being used with the following system management command
+
+docker images
+	To see which images are taking up the most space
+
+docker ps -a -s
+	You can get more informtation on the size of containers with the following command
+
+docker rm web-server
+	To remove the stopped web-server container
+
+docker rmi nginx:1.12
+	The nginx image can now be removed because there are no containers depending upon
+
+docker run --name waiter -d -t python:3 python -c 'a = input("a")'
+	Run a container based on the Python 3 image:
+
+docker run --name waiter -d -t python:3 python -c 'a = input("a")'
+	This will run a container that will endlessly wait for someone to input the value of a variable.
+	This is an example of not using the default command of an image. The command in this case is everything after the image: 
+	python -c 'a = input("a")'. The Python 3 image is the base layer of the flask-content-advisor image you built
+
+docker rm advisor
+	Remove the advisor container
+
+docker rmi flask-content-advisor
+	Remove the flask-content-advisor image
+
+docker system prune -a -f
+	To clean up everything not running
+
+
+
+
+
+
+
+
